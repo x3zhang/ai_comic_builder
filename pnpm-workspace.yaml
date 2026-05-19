@@ -1,0 +1,19 @@
+packages:
+  - .
+
+# 网络下载（pnpm v11+：与 allowBuilds 一样写在 workspace 里才会稳定生效）
+fetchTimeout: 1800000
+fetchRetries: 10
+fetchRetryMintimeout: 20000
+fetchRetryMaxtimeout: 600000
+networkConcurrency: 1
+
+allowBuilds:
+  "@parcel/watcher": true
+  "@swc/core": true
+  better-sqlite3: true
+  esbuild: true
+  msw: true
+  protobufjs: true
+  sharp: true
+  unrs-resolver: true
