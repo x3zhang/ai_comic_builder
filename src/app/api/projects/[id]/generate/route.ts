@@ -699,8 +699,7 @@ async function handleCharacterExtract(
 
   const parsed = parseJsonFromLlmText(aiText);
 
-  // Support both formats: new { characters, relationships } and legacy array
-  const extracted: Array<{
+  type CharacterExtractRow = {
     name: string;
     description: string;
     visualHint?: string;
@@ -708,13 +707,30 @@ async function handleCharacterExtract(
     heightCm?: number;
     bodyType?: string;
     performanceStyle?: string;
-  }> = Array.isArray(parsed) ? parsed : (parsed.characters || []);
-  const extractedRelations: Array<{
+  };
+  type CharacterRelationExtractRow = {
     characterA: string;
     characterB: string;
     relationType: string;
     description?: string;
-  }> = Array.isArray(parsed) ? [] : (parsed.relationships || []);
+  };
+
+  const parsedAsWrapped =
+    typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+      ? (parsed as { characters?: unknown; relationships?: unknown })
+      : null;
+
+  // Support both formats: new { characters, relationships } and legacy array
+  const extracted: CharacterExtractRow[] = Array.isArray(parsed)
+    ? (parsed as CharacterExtractRow[])
+    : Array.isArray(parsedAsWrapped?.characters)
+      ? (parsedAsWrapped.characters as CharacterExtractRow[])
+      : [];
+  const extractedRelations: CharacterRelationExtractRow[] = Array.isArray(parsed)
+    ? []
+    : Array.isArray(parsedAsWrapped?.relationships)
+      ? (parsedAsWrapped.relationships as CharacterRelationExtractRow[])
+      : [];
 
   let reusedCount = 0;
   let createdCount = 0;
@@ -1017,15 +1033,24 @@ async function handleShotSplitStream(
 
       // Parse agent output and save to DB (same logic as built-in pipeline)
       const agentParsed = parseJsonFromLlmText(agentResult.text);
+      const agentParsedWrapped =
+        typeof agentParsed === "object" && agentParsed !== null && !Array.isArray(agentParsed)
+          ? (agentParsed as { shots?: ParsedShot[] })
+          : null;
       let agentShots: ParsedShot[];
-      if (Array.isArray(agentParsed) && agentParsed.length > 0 && agentParsed[0].shots) {
-        agentShots = agentParsed.flatMap((scene: { sceneDescription?: string; shots?: ParsedShot[] }) =>
-          (scene.shots || []).map((s) => ({ ...s, sceneDescription: s.sceneDescription || scene.sceneDescription || "" }))
-        );
+      if (Array.isArray(agentParsed) && agentParsed.length > 0) {
+        const first = agentParsed[0] as { shots?: ParsedShot[] };
+        if (first?.shots) {
+          agentShots = agentParsed.flatMap((scene: { sceneDescription?: string; shots?: ParsedShot[] }) =>
+            (scene.shots || []).map((s) => ({ ...s, sceneDescription: s.sceneDescription || scene.sceneDescription || "" }))
+          );
+        } else {
+          agentShots = agentParsed as ParsedShot[];
+        }
       } else if (Array.isArray(agentParsed)) {
-        agentShots = agentParsed;
+        agentShots = [];
       } else {
-        agentShots = agentParsed.shots || [];
+        agentShots = agentParsedWrapped?.shots ?? [];
       }
       agentShots.forEach((s, i) => { s.sequence = i + 1; });
 
@@ -1223,23 +1248,32 @@ async function handleShotSplitStream(
           providerOptions: jsonMode,
         });
         const parsed = parseJsonFromLlmText(result.text);
+        const parsedWrapped =
+          typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+            ? (parsed as { shots?: ParsedShot[] })
+            : null;
         // Handle multiple formats:
         // 1. Scene-grouped: [{ sceneTitle, shots: [...] }]
         // 2. Flat with wrapper: { shots: [...] }
         // 3. Flat array: [{ sequence, ... }]
         let shotList: ParsedShot[];
-        if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].shots) {
-          // Scene-grouped format — flatten shots and inherit scene description
-          shotList = parsed.flatMap((scene: { sceneDescription?: string; shots?: ParsedShot[] }) =>
-            (scene.shots || []).map((s) => ({
-              ...s,
-              sceneDescription: s.sceneDescription || scene.sceneDescription || "",
-            }))
-          );
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const first = parsed[0] as { shots?: ParsedShot[] };
+          if (first?.shots) {
+            // Scene-grouped format — flatten shots and inherit scene description
+            shotList = parsed.flatMap((scene: { sceneDescription?: string; shots?: ParsedShot[] }) =>
+              (scene.shots || []).map((s) => ({
+                ...s,
+                sceneDescription: s.sceneDescription || scene.sceneDescription || "",
+              }))
+            );
+          } else {
+            shotList = parsed as ParsedShot[];
+          }
         } else if (Array.isArray(parsed)) {
-          shotList = parsed;
+          shotList = [];
         } else {
-          shotList = parsed.shots || [];
+          shotList = parsedWrapped?.shots ?? [];
         }
         if (!shotList.length) {
           throw new Error("Model returned empty shot list for this chunk");

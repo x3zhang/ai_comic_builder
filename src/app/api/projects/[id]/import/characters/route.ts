@@ -82,9 +82,22 @@ export async function POST(
 
         try {
           const parsed = parseJsonFromLlmText(result.text);
+          const parsedAsWrapped =
+            typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+              ? (parsed as { characters?: unknown; relationships?: unknown })
+              : null;
           // Support both { characters, relationships } and legacy array format
-          if (Array.isArray(parsed)) return { chars: parsed as ExtractedChar[], rels: [] as ExtractedRelation[] };
-          return { chars: (parsed.characters || []) as ExtractedChar[], rels: (parsed.relationships || []) as ExtractedRelation[] };
+          if (Array.isArray(parsed)) {
+            return { chars: parsed as ExtractedChar[], rels: [] as ExtractedRelation[] };
+          }
+          return {
+            chars: (Array.isArray(parsedAsWrapped?.characters)
+              ? parsedAsWrapped.characters
+              : []) as ExtractedChar[],
+            rels: (Array.isArray(parsedAsWrapped?.relationships)
+              ? parsedAsWrapped.relationships
+              : []) as ExtractedRelation[],
+          };
         } catch {
           console.error(`[ImportChars] Chunk ${idx + 1} JSON parse failed. Raw:\n${result.text.slice(0, 500)}...`);
           await addImportLog(
@@ -98,8 +111,21 @@ export async function POST(
             providerOptions: jsonMode,
           });
           const parsed = parseJsonFromLlmText(retry.text);
-          if (Array.isArray(parsed)) return { chars: parsed as ExtractedChar[], rels: [] as ExtractedRelation[] };
-          return { chars: (parsed.characters || []) as ExtractedChar[], rels: (parsed.relationships || []) as ExtractedRelation[] };
+          const parsedAsWrapped =
+            typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+              ? (parsed as { characters?: unknown; relationships?: unknown })
+              : null;
+          if (Array.isArray(parsed)) {
+            return { chars: parsed as ExtractedChar[], rels: [] as ExtractedRelation[] };
+          }
+          return {
+            chars: (Array.isArray(parsedAsWrapped?.characters)
+              ? parsedAsWrapped.characters
+              : []) as ExtractedChar[],
+            rels: (Array.isArray(parsedAsWrapped?.relationships)
+              ? parsedAsWrapped.relationships
+              : []) as ExtractedRelation[],
+          };
         }
       })
     );

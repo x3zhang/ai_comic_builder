@@ -1,7 +1,10 @@
+# Node 20 base image (runtime matches this line).
+# pnpm@latest on the registry is v11+ and requires Node >= 22 (uses node:sqlite). It cannot run on Node 20.
+# Use the latest pnpm 10.x line here — the newest major that still supports Node 20 and this repo’s lockfileVersion 10.
 FROM node:20-alpine AS base
 
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@10.33.4 --activate
+
 
 # Install ffmpeg with libass for subtitle burn-in, and fonts for CJK subtitles
 RUN apk add --no-cache ffmpeg font-noto-cjk
